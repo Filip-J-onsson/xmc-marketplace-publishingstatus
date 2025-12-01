@@ -274,7 +274,7 @@ export const PublishedStatusTable: React.FC = () => {
                       <VStack align="start" spacing={1}>
                         {item.referencedBy.map((parent) => (
                           <Text key={parent.id} fontSize="sm" color="gray.600">
-                            📌 {parent.displayName || parent.name}
+                            <span aria-hidden="true">📌</span> {parent.displayName || parent.name}
                           </Text>
                         ))}
                       </VStack>

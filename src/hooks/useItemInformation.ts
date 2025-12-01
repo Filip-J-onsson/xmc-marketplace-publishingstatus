@@ -231,8 +231,7 @@ export const useItemInformation = (): UseItemInformationResult => {
         if (validNestedIds.length === 0) {
         }
         
-        nestedItemIds.length = 0;
-        nestedItemIds.push(...validNestedIds);
+        nestedItemIds.splice(0, nestedItemIds.length, ...validNestedIds);
       }
 
       // Query validated nested items for live data and merge results

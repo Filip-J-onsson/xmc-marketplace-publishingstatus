@@ -121,9 +121,6 @@ export const getItemsFromLive = async (
       throw new Error('VITE_SITECORE_EDGE_TOKEN environment variable is not set. Please configure your Experience Edge API token.');
     }
 
-    console.log('Executing DIRECT live GraphQL query with item IDs:', itemIds);
-    console.log('Query:', query.trim());
-    
     // Make direct HTTP call to Experience Edge endpoint instead of using SDK
     const response = await fetch(LIVE_ENDPOINT, {
       method: 'POST',

@@ -19,8 +19,6 @@ import {
   AlertDescription,
   Spinner,
   Center,
-  Flex,
-  Spacer,
   useToast
 } from '@chakra-ui/react';
 import { useItemInformation } from '../hooks/useItemInformation';
@@ -136,20 +134,17 @@ export const PublishedStatusTable: React.FC = () => {
   }
 
   return (
-    <VStack spacing={6} align="stretch">
+    <VStack spacing={6} align="stretch" p={6}>
       {/* Header */}
-      <Flex align="center">
-        <VStack align="start" spacing={1}>
-          <Heading size="lg">Item Publishing Status</Heading>
-          <Text color="gray.600" fontSize="sm">
-            Current item and referenced items publishing information
-          </Text>
-        </VStack>
-        <Spacer />
+      <VStack align="start" spacing={3}>
+        <Heading size="lg">Item Publishing Status</Heading>
+        <Text color="gray.600" fontSize="sm">
+          Current item and referenced items publishing information
+        </Text>
         <Button colorScheme="blue" onClick={refetch} size="sm">
           Refresh
         </Button>
-      </Flex>
+      </VStack>
 
       {/* Summary */}
       <Box>
@@ -273,6 +268,19 @@ export const PublishedStatusTable: React.FC = () => {
                         </Text>
                       )}
                     </VStack>
+                  </Td>
+                  <Td>
+                    {item.referencedBy && item.referencedBy.length > 0 ? (
+                      <VStack align="start" spacing={1}>
+                        {item.referencedBy.map((parent) => (
+                          <Text key={parent.id} fontSize="sm" color="gray.600">
+                            📌 {parent.displayName || parent.name}
+                          </Text>
+                        ))}
+                      </VStack>
+                    ) : (
+                      <Text fontSize="sm" color="gray.400">-</Text>
+                    )}
                   </Td>
                   <Td>
                     <ItemTypeBadge itemType={item.itemType} />

@@ -296,7 +296,8 @@ export const processItemData = (
   authoringResult: ItemQueryResult,
   liveResult: ItemQueryResult,
   itemIds: string[],
-  currentItemId?: string
+  currentItemId?: string,
+  referencedByMap?: Map<string, Array<{ id: string; name: string; path: string }>>
 ): ProcessedItemInfo[] => {
   const processedItems: ProcessedItemInfo[] = [];
 
@@ -313,6 +314,11 @@ export const processItemData = (
     const isPublished = publishedVersion !== null;
     const isOutdated = isPublished && publishedVersion < latestVersion;
 
+    // Try to find referenced by info - try both with and without hyphens
+    const referencedBy = referencedByMap?.get(itemId) || 
+                        referencedByMap?.get(formatGuidWithHyphens(itemId));
+    
+
     processedItems.push({
       id: itemId,
       name: authoringItem?.name || liveItem?.name || 'Unknown Item',
@@ -324,7 +330,8 @@ export const processItemData = (
       versionDifference: isPublished ? latestVersion - publishedVersion : latestVersion,
       itemType: determineItemType(itemId, currentItemId),
       template: authoringItem?.template?.name,
-      language: authoringItem?.language?.name || liveItem?.language?.name || 'en'
+      language: authoringItem?.language?.name || liveItem?.language?.name || 'en',
+      referencedBy
     });
   });
 

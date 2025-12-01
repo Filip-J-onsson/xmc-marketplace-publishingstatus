@@ -83,20 +83,16 @@ export const useItemInformation = (): UseItemInformationResult => {
         currentItemId = itemIds[0];
       }
 
-      console.log('Fetching information for initial items:', itemIds);
-      console.log('Current item ID identified as:', currentItemId);
 
       // Get application context to extract sitecoreContextId (official approach)
       let sitecoreContextId: string | undefined;
       try {
         const { data: appContext } = await client.query('application.context');
-        console.log('Application context retrieved:', appContext);
         
         // Extract sitecoreContextId according to official documentation
         sitecoreContextId = appContext?.resourceAccess?.[0]?.context?.preview;
         
         if (!sitecoreContextId) {
-          console.log('Sitecore Context ID not found in preview context, trying other locations...');
           // Try alternative locations as fallback
           sitecoreContextId = appContext?.resourceAccess?.[0]?.context?.live ||
                               (appContext as Record<string, unknown>)?.sitecoreContextId as string ||
@@ -116,7 +112,6 @@ export const useItemInformation = (): UseItemInformationResult => {
           }
         }
         
-        console.log('Extracted sitecore context ID:', sitecoreContextId);
       } catch (error) {
         console.error('Failed to get application context:', error);
       }
@@ -149,12 +144,141 @@ export const useItemInformation = (): UseItemInformationResult => {
         getItemsFromLive(client, itemIds, sitecoreContextId, language)
       ]);
 
+      // STEP 2: Extract nested references from datasource fields (like FAQ items in multilists)
+      const nestedItemIds: string[] = [];
+      const excludedPaths = ['/sitecore/system/', '/sitecore/templates/', '/sitecore/layout/'];
+      // Track which parent items reference which nested items
+      const referencedByMap = new Map<string, Array<{ id: string; name: string; path: string }>>();
+      
+      if (authoringResult?.data?.data) {
+        const authoringData = authoringResult.data.data as Record<string, any>;
+        Object.values(authoringData).forEach((item: any) => {
+          if (item?.fields?.nodes) {
+            // Find displayName field if it exists
+            const displayNameField = item.fields.nodes.find((f: any) => f.name === '__Display name' || f.name === 'Display Name');
+            
+            const parentInfo = {
+              id: item.itemId?.replace(/[{}]/g, '').toUpperCase() || '',
+              name: item.name || 'Unknown',
+              displayName: displayNameField?.value || undefined,
+              path: item.path || ''
+            };
+            
+            
+            // Extract GUIDs from field values, but only from content-related fields
+            item.fields.nodes.forEach((field: any) => {
+              if (field.value && typeof field.value === 'string') {
+                // Skip common system/settings fields
+                const systemFields = ['__Created', '__Updated', '__Owner', '__Lock', '__Revision', '__Workflow', '__Standard Values', '__Sortorder'];
+                if (systemFields.some(sf => field.name.includes(sf))) {
+                  return; // Skip system fields
+                }
+                
+                const guidRegex = /\{?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}?/g;
+                const matches = field.value.match(guidRegex);
+                
+                if (matches) {
+                  matches.forEach((match: string) => {
+                    const cleanGuid = match.replace(/[{}]/g, '').toUpperCase();
+                    
+                    // Track the parent relationship for ALL referenced items (not just new ones)
+                    if (!referencedByMap.has(cleanGuid)) {
+                      referencedByMap.set(cleanGuid, []);
+                    }
+                    const existingRefs = referencedByMap.get(cleanGuid)!;
+                    // Avoid duplicates
+                    if (!existingRefs.some(ref => ref.id === parentInfo.id)) {
+                      existingRefs.push(parentInfo);
+                    }
+                    
+                    // Only add to nested items list if not already in our main list
+                    if (!itemIds.includes(cleanGuid) && !nestedItemIds.includes(cleanGuid)) {
+                      nestedItemIds.push(cleanGuid);
+                    }
+                  });
+                }
+              }
+            });
+          }
+        });
+      }
+      
+      // Now query the nested items to check their paths and filter out system items
+      if (nestedItemIds.length > 0) {
+        const [nestedAuthoringResult] = await Promise.all([
+          getItemsFromAuthoring(client, nestedItemIds, sitecoreContextId, language)
+        ]);
+        
+        // Filter out system items based on their paths
+        const validNestedIds: string[] = [];
+        if (nestedAuthoringResult?.data?.data) {
+          const nestedAuthoringData = nestedAuthoringResult.data.data as Record<string, any>;
+          Object.entries(nestedAuthoringData).forEach(([, nestedItem]: [string, any]) => {
+            const itemPath = nestedItem?.path || '';
+            const itemId = nestedItem?.itemId || '';
+            
+            // Check if item path starts with any excluded path
+            const isSystemItem = excludedPaths.some(excludedPath => itemPath.startsWith(excludedPath));
+            
+            if (!isSystemItem && itemPath) {
+              const cleanId = itemId.replace(/[{}]/g, '').toUpperCase();
+              validNestedIds.push(cleanId);
+            }
+          });
+        }
+        
+        // Only proceed if we have valid items
+        if (validNestedIds.length === 0) {
+          console.log('⚠️ No valid nested content items found');
+        }
+        
+        nestedItemIds.length = 0;
+        nestedItemIds.push(...validNestedIds);
+      }
+
+      // Query validated nested items for live data and merge results
+      if (nestedItemIds.length > 0) {
+        const [nestedLiveResult] = await Promise.all([
+          getItemsFromLive(client, nestedItemIds, sitecoreContextId, language)
+        ]);
+
+        // We already have authoring data from validation, now get it properly with all fields
+        const [nestedAuthoringFullResult] = await Promise.all([
+          getItemsFromAuthoring(client, nestedItemIds, sitecoreContextId, language)
+        ]);
+
+        // Merge nested results with original results
+        if (nestedAuthoringFullResult?.data?.data && authoringResult?.data?.data) {
+          const authoringData = authoringResult.data.data as Record<string, any>;
+          const nestedAuthoringData = nestedAuthoringFullResult.data.data as Record<string, any>;
+          const startIndex = Object.keys(authoringData).length;
+          
+          Object.entries(nestedAuthoringData).forEach(([, value], index) => {
+            authoringData[`item${startIndex + index}`] = value;
+          });
+        }
+
+        if (nestedLiveResult?.data?.data && liveResult?.data?.data) {
+          const liveData = liveResult.data.data as Record<string, any>;
+          const nestedLiveData = nestedLiveResult.data.data as Record<string, any>;
+          const startIndex = Object.keys(liveData).length;
+          
+          Object.entries(nestedLiveData).forEach(([, value], index) => {
+            liveData[`item${startIndex + index}`] = value;
+          });
+        }
+
+        // Add nested IDs to our itemIds array
+        itemIds.push(...nestedItemIds);
+      }
+
       // Process the data
       const processedItems = processItemData(
         authoringResult,
         liveResult,
         itemIds,
-        currentItemId
+        currentItemId,
+        referencedByMap
       );
 
       // Create the complete response

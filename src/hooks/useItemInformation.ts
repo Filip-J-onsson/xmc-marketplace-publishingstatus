@@ -160,7 +160,7 @@ export const useItemInformation = (): UseItemInformationResult => {
             const parentInfo = {
               id: item.itemId?.replace(/[{}]/g, '').toUpperCase() || '',
               name: item.name || 'Unknown',
-              displayName: displayNameField?.value || undefined,
+              displayName: displayNameField?.value,
               path: item.path || ''
             };
             

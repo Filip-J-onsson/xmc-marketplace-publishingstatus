@@ -14,6 +14,12 @@ export interface ProcessedItemInfo {
   itemType: ItemType;
   template?: string;
   language?: string;
+  referencedBy?: Array<{
+    id: string;
+    name: string;
+    displayName?: string;
+    path: string;
+  }>;
 }
 
 export interface ItemInformationSummary {

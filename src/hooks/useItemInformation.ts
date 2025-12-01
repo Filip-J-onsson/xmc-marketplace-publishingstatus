@@ -229,7 +229,6 @@ export const useItemInformation = (): UseItemInformationResult => {
         
         // Only proceed if we have valid items
         if (validNestedIds.length === 0) {
-          console.log('⚠️ No valid nested content items found');
         }
         
         nestedItemIds.length = 0;
